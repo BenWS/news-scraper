@@ -128,7 +128,7 @@ class WiredNewsScraper(object):
         return True
 
     def scrape():
-        while (!scraper.isComplete()):
+        while (not scraper.isComplete()):
             articles = scraper.getNewsArticles(self.page_current)
             for article in articles:
                 insertIntoDatabase_NewsArticleContributor(article['url'], newsArticle['contributor'])
