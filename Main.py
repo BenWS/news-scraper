@@ -14,6 +14,10 @@ from bs4 import BeautifulSoup
 import pymysql.cursors
 import os
 
+'''
+SCRAPER CLASS DEFINITION
+'''
+
 class WiredNewsScraper(object):
 
     def __init__(self, connection):
@@ -94,6 +98,9 @@ class WiredNewsScraper(object):
             print(self.page_lastValidation)
         connection.close()
 
+'''
+MAIN PROGRAM EXECUTION
+'''
 
 connection = pymysql.connect(
     host='localhost'
