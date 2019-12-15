@@ -30,7 +30,7 @@ class WiredNewsScraper(object):
                 searchExpression = 'window.__INITIAL_STATE__ = JSON.parse\(decodeURIComponent\("(.*)"\)\)'
                 searchMatch = re.search(searchExpression,webResponse.text)
                 articlesSerializedJSON = urllib.parse.unquote(searchMatch.group(1))
- 
+
                 articlesDeserializedJSON = json.loads(articlesSerializedJSON)
                 articles = articlesDeserializedJSON['primary']['items']
 
@@ -86,7 +86,7 @@ class WiredNewsScraper(object):
 
     def scrape(self):
         while (not self.isComplete()):
-            self.articles = scraper.getNewsArticles()
+            self.articles = self.getNewsArticles()
             for article in self.articles:
                 self.insertIntoDatabase_NewsArticleContributor(article['url'], article['contributor'])
                 self.insertIntoDatabase_NewsArticle(article['url'], article['title'], article['pubDate'])
