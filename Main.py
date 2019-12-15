@@ -6,40 +6,6 @@ MySQL Python Connector: https://pymysql.readthedocs.io/en/latest/
 Requests Module Documentation: https://pypi.org/project/requests/2.7.0/
 '''
 
-'''
-def isComplete(self):
-  check to see if current page is the final page
-  OR
-  if the current page has been incremented NUMBER times since last check
-    check whether the most recent cached news articles have already been scraped
-
-
-while !self.isComplete():
-  request web data
-  parse web data for news articles
-  insert news article contributors into database
-  insert news articles into database
-  increment current news article database record count
-
-def __init__(self):
-  initialize total number of archive pages
-  initialize current database record count
-
-
-def insertIntoDatabase_NewsArticles():
-  if page has been incremented NUMBER times since last check
-    check whether the most recent cached articles have already been scraped
-    if so - raise error and end program
-  increment total database record count
-  insert articles into database
-
-def insertIntoDatabase_NewsArticleContributors():
-  if page has been incremented NUMBER times since last check
-    check whether duplicates are being inserted
-    if so - raise error and end program
-  insert article contributors into database
-'''
-
 import requests
 import urllib.parse
 import re
@@ -48,47 +14,29 @@ from bs4 import BeautifulSoup
 import pymysql.cursors
 import os
 
-
-
-'''
-GET THE TOTAL NUMBER OF ARCHIVE PAGES
-'''
-response = requests.get('https://www.wired.com/most-recent/page/1')
-soup = BeautifulSoup(response.text, 'html.parser')
-soup_results = soup.find(class_ = 'pagination-component__pages')
-archivePageOptions = []
-
-for item in soup_results.contents:
-    try:
-        archivePageOptions.append(int(item.a.contents[0]))
-    except Exception as e:
-        print(e)
-
-countTotalPages = max(archivePageOptions)
-
-
-
 class WiredNewsScraper(object):
 
     def __init__(self, connection):
         self.connection = connection
+        self.cursor = connection.cursor()
         self.page_current = 1
         self.page_lastValidation = 1
+        self.articles = None
 
-    def getNewsArticles(self, currentPage):
+    def getNewsArticles(self):
             result = []
             try:
-                webResponse = requests.get(f'https://www.wired.com/most-recent/page/{currentPage}')
+                webResponse = requests.get(f'https://www.wired.com/most-recent/page/{self.page_current}')
                 searchExpression = 'window.__INITIAL_STATE__ = JSON.parse\(decodeURIComponent\("(.*)"\)\)'
                 searchMatch = re.search(searchExpression,webResponse.text)
                 articlesSerializedJSON = urllib.parse.unquote(searchMatch.group(1))
-
+ 
                 articlesDeserializedJSON = json.loads(articlesSerializedJSON)
                 articles = articlesDeserializedJSON['primary']['items']
 
             except Exception as e:
                 e = str(e).replace('\'','')
-                cursor.execute(f"INSERT INTO NewsArticle_ScrapeErrorLog (message, page_) VALUES ('{e}', {currentPage})")
+                self.cursor.execute(f"INSERT INTO NewsArticle_ScrapeErrorLog (message, page_) VALUES ('{e}', {self.page_current})")
                 connection.commit()
 
             for article in articles:
@@ -100,40 +48,51 @@ class WiredNewsScraper(object):
 
             return result
 
-
     def insertIntoDatabase_NewsArticle(self, articleURL, articleTitle, articlePubDate):
         try:
-            countAffectedRows = cursor.execute(f"INSERT INTO NewsArticle (title, url, publishDate) VALUES ('{articleTitle}','{articleURL}','{articlePubDate}')")
-            connection.commit()
+            countAffectedRows = self.cursor.execute(f"INSERT INTO NewsArticle (title, url, publishDate) VALUES ('{articleTitle}','{articleURL}','{articlePubDate}')")
+            self.connection.commit()
         except Exception as e:
             e = str(e).replace('\'','')
-            cursor.execute(f"INSERT INTO NewsArticle_ScrapeErrorLog (message, page_) VALUES ('{e}', {self.currentPage})")
-            connection.commit()
+            self.cursor.execute(f"INSERT INTO NewsArticle_ScrapeErrorLog (message, page_) VALUES ('{e}', {self.page_current})")
+            self.connection.commit()
             countAffectedRows = 0
 
-        connection.commit()
-
     def insertIntoDatabase_NewsArticleContributor(self, articleURL, articleContributor):
-    	try:
-    		cursor.execute(f"INSERT INTO NewsArticleContributor (url, contributor) VALUES ('{articleURL}', '{articleContributor}')")
-    		connection.commit()
-    	except Exception as e:
-    		e = str(e).replace('\'','')
-    		cursor.execute(f"INSERT INTO NewsArticleContributor_ScrapeErrorLog (message, page_) VALUES ('{e}', {self.currentPage})")
+        try:
+            self.cursor.execute(f"INSERT INTO NewsArticleContributor (url, contributor) VALUES ('{articleURL}', '{articleContributor}')")
+            self.connection.commit()
+        except Exception as e:
+            e = str(e).replace('\'','')
+            self.cursor.execute(f"INSERT INTO NewsArticleContributor_ScrapeErrorLog (message, page_) VALUES ('{e}', {self.page_current})")
+            self.connection.commit()
 
-        connection.commit()
+    def isArticleInDatabase(self, article):
+        countRecords = self.cursor.execute(f"SELECT count(*) AS count from NewsArticleContributor where url = '{article['url']}'")
+        if (countRecords > 0):
+            return True
+        else:
+            return False
+
 
     def isComplete(self):
-        # if (self.page_current - self.page_lastValidation > 100):
-        return True
+        if (self.page_current - self.page_lastValidation > 10):
+            for article in self.articles:
+                if not self.isArticleInDatabase(article):
+                    return False
+                    self.page_lastValidation = self.page_current
+                else:
+                    return True
 
-    def scrape():
-        while (not scraper.isComplete()):
-            articles = scraper.getNewsArticles(self.page_current)
-            for article in articles:
-                insertIntoDatabase_NewsArticleContributor(article['url'], newsArticle['contributor'])
-                insertIntoDatabase_NewsArticle(article['url'], article['title'], article['pubDate'])
+    def scrape(self):
+        while (not self.isComplete()):
+            self.articles = scraper.getNewsArticles()
+            for article in self.articles:
+                self.insertIntoDatabase_NewsArticleContributor(article['url'], article['contributor'])
+                self.insertIntoDatabase_NewsArticle(article['url'], article['title'], article['pubDate'])
             self.page_current += 1
+            print(self.page_current)
+            print(self.page_lastValidation)
         connection.close()
 
 
@@ -144,5 +103,5 @@ connection = pymysql.connect(
     , database='NewsAggregator'
     , cursorclass=pymysql.cursors.DictCursor)
 
-scraper = WiredNewsScraper(connnection)
+scraper = WiredNewsScraper(connection)
 scraper.scrape()
