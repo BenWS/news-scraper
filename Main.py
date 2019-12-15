@@ -80,9 +80,8 @@ class WiredNewsScraper(object):
             for article in self.articles:
                 if not self.isArticleInDatabase(article):
                     return False
-                    self.page_lastValidation = self.page_current
-                else:
-                    return True
+                    self.page_lastValidation = self.page_currents
+            return True
 
     def scrape(self):
         while (not self.isComplete()):
